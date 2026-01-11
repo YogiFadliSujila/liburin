@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 defineProps({
     trips: {
@@ -12,6 +13,21 @@ defineProps({
         default: () => [],
     },
 });
+
+// Join Trip Form
+const showJoinModal = ref(false);
+const joinForm = useForm({
+    join_code: '',
+});
+
+const submitJoin = () => {
+    joinForm.post(route('trips.join'), {
+        onSuccess: () => {
+            showJoinModal.value = false;
+            joinForm.reset();
+        },
+    });
+};
 
 const handleAccept = (tripId) => {
     router.post(route('trips.members.accept', tripId), {}, {
@@ -80,6 +96,19 @@ const getStatusLabel = (status) => {
             <p class="text-text-sub-light dark:text-text-sub-dark text-sm">
                 Siap untuk petualangan berikutnya?
             </p>
+        </div>
+
+        <!-- Join Trip Button -->
+        <div class="mb-6">
+            <button
+                @click="showJoinModal = true"
+                class="w-full py-3 px-4 bg-white dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl text-gray-600 dark:text-gray-400 hover:border-primary hover:text-primary transition-all flex items-center justify-center gap-2"
+            >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                </svg>
+                <span class="font-medium">Gabung Trip dengan Kode</span>
+            </button>
         </div>
 
         <!-- Pending Invitations -->
@@ -236,5 +265,60 @@ const getStatusLabel = (status) => {
                 <span class="font-semibold text-sm pr-1">Buat Trip Baru</span>
             </Link>
         </div>
+
+        <!-- Join Trip Modal -->
+        <Teleport to="body">
+            <div v-if="showJoinModal" class="fixed inset-0 z-50 overflow-y-auto">
+                <div class="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showJoinModal = false" />
+                    <div class="inline-block transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:align-middle">
+                        <form @submit.prevent="submitJoin">
+                            <div class="bg-white dark:bg-gray-800 px-6 pt-6 pb-4">
+                                <div class="flex items-center gap-3 mb-4">
+                                    <div class="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
+                                        <svg class="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                                        </svg>
+                                    </div>
+                                    <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100">Gabung Trip</h3>
+                                </div>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                    Masukkan kode 8 karakter yang diberikan oleh admin trip.
+                                </p>
+                                <div>
+                                    <input
+                                        v-model="joinForm.join_code"
+                                        type="text"
+                                        placeholder="Contoh: ABCD1234"
+                                        maxlength="8"
+                                        class="w-full text-center text-2xl font-mono tracking-widest uppercase px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-900 dark:text-gray-100"
+                                        :class="{ 'border-red-500': joinForm.errors.join_code }"
+                                    />
+                                    <p v-if="joinForm.errors.join_code" class="mt-2 text-sm text-red-600 dark:text-red-400">
+                                        {{ joinForm.errors.join_code }}
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 dark:bg-gray-700/50 px-6 py-4 flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    @click="showJoinModal = false"
+                                    class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="submit"
+                                    :disabled="joinForm.processing || joinForm.join_code.length !== 8"
+                                    class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition disabled:opacity-50"
+                                >
+                                    {{ joinForm.processing ? 'Memproses...' : 'Gabung' }}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
     </AuthenticatedLayout>
 </template>

@@ -156,6 +156,7 @@ class TripController extends Controller
                 'remaining_balance' => $trip->remaining_balance,
                 'creator' => $trip->creator,
                 'created_at' => $trip->created_at->format('Y-m-d'),
+                'join_code' => $trip->join_code,
             ],
             'members' => $trip->activeMembers->map(fn($member) => [
                 'id' => $member->id,
@@ -253,5 +254,56 @@ class TripController extends Controller
         return redirect()
             ->route('trips.index')
             ->with('success', 'Trip berhasil dihapus!');
+    }
+
+    /**
+     * Join a trip using a join code.
+     */
+    public function join(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'join_code' => 'required|string|size:8',
+        ]);
+
+        $trip = Trip::where('join_code', strtoupper($validated['join_code']))->first();
+
+        if (!$trip) {
+            return back()->withErrors(['join_code' => 'Kode trip tidak ditemukan.']);
+        }
+
+        $user = Auth::user();
+
+        // Check if already a member
+        $existingMember = TripMember::where('trip_id', $trip->id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if ($existingMember) {
+            if ($existingMember->status === TripMember::STATUS_ACTIVE) {
+                return back()->withErrors(['join_code' => 'Anda sudah menjadi anggota trip ini.']);
+            }
+            if ($existingMember->status === TripMember::STATUS_PENDING) {
+                return back()->withErrors(['join_code' => 'Anda sudah memiliki undangan pending untuk trip ini.']);
+            }
+            
+            // Re-join if previously left
+            $existingMember->update([
+                'status' => TripMember::STATUS_ACTIVE,
+                'joined_at' => now(),
+            ]);
+        } else {
+            // Create new membership
+            TripMember::create([
+                'trip_id' => $trip->id,
+                'user_id' => $user->id,
+                'role' => TripMember::ROLE_MEMBER,
+                'status' => TripMember::STATUS_ACTIVE,
+                'joined_at' => now(),
+            ]);
+        }
+
+        return redirect()
+            ->route('trips.show', $trip)
+            ->with('success', 'Berhasil bergabung ke trip "' . $trip->name . '"!');
     }
 }

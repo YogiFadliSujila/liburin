@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class Trip extends Model
 {
@@ -22,9 +23,51 @@ class Trip extends Model
         'end_date',
         'target_amount',
         'status',
+        'join_code',
         'cover_image',
         'created_by',
     ];
+
+    /**
+     * Boot the model.
+     */
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function (Trip $trip) {
+            if (empty($trip->join_code)) {
+                $trip->join_code = static::generateUniqueJoinCode();
+            }
+        });
+    }
+
+    /**
+     * Generate a unique 8-character join code.
+     */
+    public static function generateUniqueJoinCode(): string
+    {
+        do {
+            // Generate alphanumeric code (excluding confusing chars like 0, O, I, L)
+            $characters = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+            $code = '';
+            for ($i = 0; $i < 8; $i++) {
+                $code .= $characters[random_int(0, strlen($characters) - 1)];
+            }
+        } while (static::where('join_code', $code)->exists());
+
+        return $code;
+    }
+
+    /**
+     * Regenerate the join code for this trip.
+     */
+    public function regenerateJoinCode(): string
+    {
+        $this->join_code = static::generateUniqueJoinCode();
+        $this->save();
+        return $this->join_code;
+    }
 
     protected $casts = [
         'start_date' => 'date',

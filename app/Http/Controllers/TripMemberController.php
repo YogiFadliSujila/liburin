@@ -213,4 +213,16 @@ class TripMemberController extends Controller
             ->route('trips.index')
             ->with('success', 'Anda telah keluar dari trip.');
     }
+
+    /**
+     * Regenerate the join code for a trip.
+     */
+    public function regenerateCode(Trip $trip): RedirectResponse
+    {
+        Gate::authorize('manageMembers', $trip);
+
+        $newCode = $trip->regenerateJoinCode();
+
+        return back()->with('success', 'Kode join berhasil diperbarui: ' . $newCode);
+    }
 }

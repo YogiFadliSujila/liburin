@@ -45,6 +45,10 @@ Route::middleware('auth')->group(function () {
         Route::delete('/{member}', [TripMemberController::class, 'destroy'])->name('destroy');
     });
 
+    // Join Trip by Code
+    Route::post('/trips/join', [TripController::class, 'join'])->name('trips.join');
+    Route::post('/trips/{trip}/regenerate-code', [TripMemberController::class, 'regenerateCode'])->name('trips.regenerate-code');
+
     // Destinations routes
     Route::prefix('trips/{trip}/destinations')->name('trips.destinations.')->group(function () {
         Route::get('/', [DestinationController::class, 'index'])->name('index');
