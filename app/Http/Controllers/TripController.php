@@ -52,7 +52,8 @@ class TripController extends Controller
             ->trips()
             ->wherePivot('status', 'pending')
             ->with('creator:id,name')
-            ->latest()
+            ->select('trips.*') // Specify table to avoid ambiguity
+            ->orderByPivot('created_at', 'desc') // Show newest invitations first
             ->get()
             ->map(fn($trip) => [
                 'id' => $trip->id,

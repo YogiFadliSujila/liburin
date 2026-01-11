@@ -62,8 +62,23 @@ class TripMemberController extends Controller
         $user = User::where('email', $validated['email'])->first();
 
         // Check if already a member
-        if ($trip->hasMember($user)) {
-            return back()->withErrors(['email' => 'User sudah menjadi anggota trip ini.']);
+        $existingMember = TripMember::where('trip_id', $trip->id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if ($existingMember) {
+            if (in_array($existingMember->status, [TripMember::STATUS_ACTIVE, TripMember::STATUS_PENDING])) {
+                return back()->withErrors(['email' => 'User sudah menjadi anggota atau memiliki undangan pending.']);
+            }
+            
+            // Re-invite member who left
+            $existingMember->update([
+                'status' => TripMember::STATUS_PENDING,
+                'role' => $validated['role'] ?? TripMember::ROLE_MEMBER,
+                'joined_at' => null, // Reset joined_at
+            ]);
+            
+            return back()->with('success', 'Undangan berhasil dikirim ulang!');
         }
 
         $member = TripMember::create([
