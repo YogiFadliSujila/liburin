@@ -3,6 +3,8 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#F3F4F6" media="(prefers-color-scheme: light)">
+        <meta name="theme-color" content="#111827" media="(prefers-color-scheme: dark)">
 
         <title inertia>{{ config('app.name', 'Laravel') }}</title>
 
@@ -17,7 +19,7 @@
         @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"])
         @inertiaHead
     </head>
-    <body class="font-sans antialiased">
+    <body class="font-sans antialiased bg-background-light dark:bg-background-dark text-text-main-light dark:text-text-main-dark">
         @inertia
     </body>
 </html>

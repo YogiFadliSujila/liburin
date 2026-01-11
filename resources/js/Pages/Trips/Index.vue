@@ -76,9 +76,6 @@ const getStatusLabel = (status) => {
                 <h2 class="text-2xl font-bold text-text-main-light dark:text-text-main-dark font-display">
                     Hi, {{ $page.props.auth.user.name.split(' ')[0] }} 👋
                 </h2>
-                <span class="text-xs font-medium px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full">
-                    Member
-                </span>
             </div>
             <p class="text-text-sub-light dark:text-text-sub-dark text-sm">
                 Siap untuk petualangan berikutnya?
@@ -125,17 +122,7 @@ const getStatusLabel = (status) => {
         <!-- Trips Header -->
         <div class="flex items-center justify-between mb-4">
             <div class="flex items-center space-x-2">
-                <span class="text-2xl">🌴</span>
                 <h3 class="text-xl font-bold text-text-main-light dark:text-text-main-dark font-display">Trips Saya</h3>
-            </div>
-            <!-- View Toggle (Visual Only for now) -->
-            <div class="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
-                <button class="p-1.5 bg-white dark:bg-gray-700 rounded shadow-sm text-primary">
-                    <span class="material-symbols-rounded text-sm">grid_view</span>
-                </button>
-                <button class="p-1.5 text-text-sub-light dark:text-text-sub-dark hover:bg-white/50 dark:hover:bg-gray-700/50 rounded transition-colors">
-                    <span class="material-symbols-rounded text-sm">list</span>
-                </button>
             </div>
         </div>
 
