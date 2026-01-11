@@ -175,7 +175,7 @@ const statusOptions = [
                             <InputLabel for="cover_image" value="Cover Image (Opsional)" />
                             <div class="mt-1">
                                 <div v-if="trip.cover_image && !form.cover_image" class="mb-3 relative rounded-lg overflow-hidden">
-                                    <img :src="`/storage/${trip.cover_image}`" class="w-full h-32 object-cover" />
+                                    <img :src="trip.cover_image" class="w-full h-32 object-cover" />
                                 </div>
                                 <label
                                     for="cover_image"

@@ -157,7 +157,7 @@ const getStatusLabel = (status) => {
                         <div class="absolute inset-0 group-hover:scale-105 transition-transform duration-500"></div>
                         <img 
                             v-if="trip.cover_image"
-                            :src="`/storage/${trip.cover_image}`" 
+                            :src="trip.cover_image" 
                             :alt="trip.name" 
                             class="absolute inset-0 w-full h-full object-cover  opacity-100 transition-transform duration-500 group-hover:scale-105" 
                         />

@@ -556,7 +556,7 @@ const totalEstimatedCost = computed(() => {
                     <div class="absolute inset-0 bg-gradient-to-t from-background-light/80 to-transparent z-10 dark:from-background-dark/80"></div>
                      <img 
                         v-if="trip.cover_image"
-                        :src="`/storage/${trip.cover_image}`" 
+                        :src="trip.cover_image" 
                         :alt="trip.name" 
                         class="w-full h-full object-cover"
                     />

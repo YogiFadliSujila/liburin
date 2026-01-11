@@ -9,6 +9,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -37,7 +38,7 @@ class TripController extends Controller
                 'start_date' => $trip->start_date->format('Y-m-d'),
                 'end_date' => $trip->end_date->format('Y-m-d'),
                 'status' => $trip->status,
-                'cover_image' => $trip->cover_image,
+                'cover_image' => $trip->cover_image ? Storage::url($trip->cover_image) : null,
                 'target_amount' => $trip->target_amount,
                 'total_savings' => $trip->total_savings,
                 'savings_progress' => $trip->savings_progress,
@@ -59,7 +60,7 @@ class TripController extends Controller
                 'destination' => $trip->destination,
                 'start_date' => $trip->start_date->format('Y-m-d'),
                 'end_date' => $trip->end_date->format('Y-m-d'),
-                'cover_image' => $trip->cover_image,
+                'cover_image' => $trip->cover_image ? Storage::url($trip->cover_image) : null,
                 'creator' => $trip->creator,
                 'is_admin' => $trip->pivot->role === 'admin', // Role offered
             ]);
@@ -96,7 +97,7 @@ class TripController extends Controller
         // Handle cover image upload
         if ($request->hasFile('cover_image')) {
             $validated['cover_image'] = $request->file('cover_image')
-                ->store('trips/covers', 'public');
+                ->storePublicly('trips/covers');
         }
 
         $validated['created_by'] = Auth::id();
@@ -146,7 +147,7 @@ class TripController extends Controller
                 'start_date' => $trip->start_date->format('Y-m-d'),
                 'end_date' => $trip->end_date->format('Y-m-d'),
                 'status' => $trip->status,
-                'cover_image' => $trip->cover_image,
+                'cover_image' => $trip->cover_image ? Storage::url($trip->cover_image) : null,
                 'target_amount' => (float) $trip->target_amount,
                 'total_savings' => $trip->total_savings,
                 'savings_progress' => round($trip->savings_progress, 1),
@@ -204,7 +205,7 @@ class TripController extends Controller
                 'end_date' => $trip->end_date->format('Y-m-d'),
                 'target_amount' => (float) $trip->target_amount,
                 'status' => $trip->status,
-                'cover_image' => $trip->cover_image,
+                'cover_image' => $trip->cover_image ? Storage::url($trip->cover_image) : null,
             ],
         ]);
     }
@@ -229,7 +230,7 @@ class TripController extends Controller
 
         if ($request->hasFile('cover_image')) {
             $validated['cover_image'] = $request->file('cover_image')
-                ->store('trips/covers', 'public');
+                ->storePublicly('trips/covers');
         }
 
         $trip->update($validated);
