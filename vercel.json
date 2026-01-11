@@ -1,6 +1,6 @@
 {
     "version": 2,
-    "framework": "vite",
+
     "functions": {
         "api/index.php": { "runtime": "vercel-php@0.7.2" }
     },
@@ -14,7 +14,7 @@
             "dest": "/public/storage/$1"
         },
         {
-            "src": "/(.*\.(css|js|ico|png|jpg|jpeg|svg|woff|woff2|ttf|eot))",
+            "src": "/(.*\\.(css|js|ico|png|jpg|jpeg|svg|woff|woff2|ttf|eot))",
             "dest": "/public/$1"
         },
         {
