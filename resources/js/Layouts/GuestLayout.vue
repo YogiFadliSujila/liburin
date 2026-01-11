@@ -10,9 +10,9 @@ import { Link } from '@inertiajs/vue3';
         <div>
             <Link href="/" class="flex flex-col items-center">
                  <div class="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-white shadow-glow mb-2">
-                    <span class="material-symbols-rounded text-2xl">travel_explore</span>
+                    <img src="https://img.freepik.com/free-psd/3d-rendering-travel-icon_23-2151695696.jpg?t=st=1768116496~exp=1768120096~hmac=1a85b29300d7ef1c3cee34aec12c9c963445b7c36db14f6f45661aa81205c240&w=1480" class="w-full h-full object-cover rounded-lg">
                 </div>
-                <h1 class="font-bold text-2xl text-text-main-light dark:text-text-main-dark font-display tracking-tight">TripMaster</h1>
+                <h1 class="font-bold text-2xl text-text-main-light dark:text-text-main-dark font-display tracking-tight">Liburin</h1>
             </Link>
         </div>
 

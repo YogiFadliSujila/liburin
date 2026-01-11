@@ -177,6 +177,10 @@ class SavingsController extends Controller
             ],
             'savings' => [
                 'id' => $savings->id,
+                'user' => [
+                    'id' => $savings->user->id,
+                    'name' => $savings->user->name,
+                ],
                 'amount' => (float) $savings->amount,
                 'payment_method' => $savings->payment_method,
                 'payment_status' => $savings->payment_status,
@@ -194,6 +198,7 @@ class SavingsController extends Controller
             'clientKey' => config('midtrans.client_key'),
             'isProduction' => config('midtrans.is_production'),
             'isOwner' => $savings->user_id === Auth::id(),
+            'isAdmin' => $trip->isAdmin(Auth::user()),
         ]);
     }
 

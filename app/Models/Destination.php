@@ -23,6 +23,8 @@ class Destination extends Model
         'order',
         'estimated_cost',
         'category',
+        'latitude',
+        'longitude',
     ];
 
     protected $casts = [

@@ -47,8 +47,26 @@ class TripController extends Controller
                 'creator' => $trip->creator,
             ]);
 
+        $invitations = Auth::user()
+            ->trips()
+            ->wherePivot('status', 'pending')
+            ->with('creator:id,name')
+            ->latest()
+            ->get()
+            ->map(fn($trip) => [
+                'id' => $trip->id,
+                'name' => $trip->name,
+                'destination' => $trip->destination,
+                'start_date' => $trip->start_date->format('Y-m-d'),
+                'end_date' => $trip->end_date->format('Y-m-d'),
+                'cover_image' => $trip->cover_image,
+                'creator' => $trip->creator,
+                'is_admin' => $trip->pivot->role === 'admin', // Role offered
+            ]);
+
         return Inertia::render('Trips/Index', [
             'trips' => $trips,
+            'invitations' => $invitations,
         ]);
     }
 
@@ -161,6 +179,8 @@ class TripController extends Controller
                 'order' => $dest->order,
                 'estimated_cost' => (float) $dest->estimated_cost,
                 'category' => $dest->category,
+                'latitude' => $dest->latitude,
+                'longitude' => $dest->longitude,
             ]),
             'userRole' => $userMembership?->role ?? 'member',
             'isAdmin' => $trip->isAdmin(Auth::user()),

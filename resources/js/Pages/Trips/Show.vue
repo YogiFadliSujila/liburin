@@ -5,7 +5,22 @@ import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, nextTick, watch } from 'vue';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix Leaflet icon issue
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+    iconUrl: icon,
+    shadowUrl: iconShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
 
 const props = defineProps({
     trip: Object,
@@ -27,7 +42,94 @@ const destinationForm = useForm({
     start_time: '',
     end_time: '',
     estimated_cost: '',
+    latitude: '',
+    longitude: '',
 });
+
+const showInviteModal = ref(false);
+const inviteForm = useForm({
+    email: '',
+    role: 'member',
+});
+
+const submitInvite = () => {
+    inviteForm.post(route('trips.members.store', props.trip.id), {
+        onSuccess: () => {
+            showInviteModal.value = false;
+            inviteForm.reset();
+        },
+    });
+};
+
+const showPromoteModal = ref(false);
+const memberToPromote = ref(null);
+
+const promoteMember = (member) => {
+    memberToPromote.value = member;
+    showPromoteModal.value = true;
+};
+
+const confirmPromote = () => {
+    if (memberToPromote.value) {
+        router.patch(route('trips.members.update', [props.trip.id, memberToPromote.value.trip_member_id]), {
+            role: 'admin'
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                showPromoteModal.value = false;
+                memberToPromote.value = null;
+            }
+        });
+    }
+};
+
+const modalMapContainer = ref(null);
+
+const initModalMap = () => {
+    // Wait for modal transition/rendering
+    let attempts = 0;
+    const tryInit = () => {
+        const container = document.getElementById('modal-map');
+        if (container) {
+             // If map already exists, just resize it
+            if (modalMapInstance.value) {
+                modalMapInstance.value.invalidateSize();
+                return;
+            }
+
+            // Default to Borobudur or existing coords
+            let center = [-7.6079, 110.2038]; 
+            if (destinationForm.latitude && destinationForm.longitude) {
+                center = [destinationForm.latitude, destinationForm.longitude];
+            }
+
+            modalMapInstance.value = L.map('modal-map').setView(center, 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap'
+            }).addTo(modalMapInstance.value);
+
+            modalMapInstance.value.on('click', (e) => {
+                addMarkerToModalMap(e.latlng.lat, e.latlng.lng);
+            });
+            
+            if (destinationForm.latitude && destinationForm.longitude) {
+                addMarkerToModalMap(destinationForm.latitude, destinationForm.longitude);
+            }
+            
+            // Force resize after init
+            setTimeout(() => {
+                modalMapInstance.value.invalidateSize();
+            }, 200);
+
+        } else if (attempts < 20) {
+            attempts++;
+            setTimeout(tryInit, 100);
+        }
+    };
+    
+    // Start trying
+    tryInit();
+};
 
 const categories = {
     attraction: '🏛️ Atraksi',
@@ -37,13 +139,287 @@ const categories = {
     other: '📍 Lainnya',
 };
 
+const mapInstance = ref(null);
+const modalMapInstance = ref(null);
+const itineraryMapInstance = ref(null);
+const itineraryLayerGroup = ref(null);
+const modalMarker = ref(null);
+const searchQuery = ref('');
+const isSearching = ref(false);
+const addMarkerToModalMap = (lat, lng) => {
+    destinationForm.latitude = lat;
+    destinationForm.longitude = lng;
+
+    if (modalMarker.value) {
+        modalMarker.value.setLatLng([lat, lng]);
+    } else {
+        modalMarker.value = L.marker([lat, lng], { draggable: true }).addTo(modalMapInstance.value);
+        modalMarker.value.on('dragend', (event) => {
+            const position = event.target.getLatLng();
+            destinationForm.latitude = position.lat;
+            destinationForm.longitude = position.lng;
+        });
+    }
+    
+    modalMapInstance.value.setView([lat, lng], 15);
+};
+
+const searchLocation = async () => {
+    if (!searchQuery.value) return;
+    
+    isSearching.value = true;
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery.value)}`);
+        const data = await response.json();
+        
+        if (data && data.length > 0) {
+            const result = data[0];
+            const lat = parseFloat(result.lat);
+            const lon = parseFloat(result.lon);
+            
+            addMarkerToModalMap(lat, lon);
+            
+            // Auto fill location name if empty
+            if (!destinationForm.location) {
+                destinationForm.location = result.display_name.split(',')[0];
+            }
+        } else {
+            alert('Lokasi tidak ditemukan');
+        }
+    } catch (error) {
+        console.error('Error searching location:', error);
+        alert('Gagal mencari lokasi');
+    } finally {
+        isSearching.value = false;
+    }
+};
+
+watch(showDestinationModal, (isOpen) => {
+    if (isOpen) {
+        nextTick(() => {
+            initModalMap();
+        });
+    } else {
+        // Cleanup map when modal closes to save resources? 
+        // Or just leave it for next time.
+        // For now let's leave it, but maybe reset marker if needed.
+    }
+});
+
+const fetchRoute = async (coordinates) => {
+    // coordinates: [[lat, lng], [lat, lng], ...]
+    if (coordinates.length < 2) return null;
+
+    // Timeout after 3 seconds to ensure fallback runs if API is slow
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    // OSRM requires lon,lat format
+    const waypoints = coordinates.map(c => `${c[1]},${c[0]}`).join(';');
+    const url = `https://router.project-osrm.org/route/v1/driving/${waypoints}?overview=full&geometries=geojson`;
+
+    try {
+        const response = await fetch(url, { signal: controller.signal });
+        const data = await response.json();
+        
+        if (data.code === 'Ok' && data.routes.length > 0) {
+            return data.routes[0].geometry;
+        }
+    } catch (error) {
+        console.warn('Routing API failed or timed out, using fallback straight lines.', error);
+    } finally {
+        clearTimeout(timeoutId);
+    }
+    return null;
+};
+
+const initItineraryMap = async () => {
+    const container = document.getElementById('itinerary-map');
+    if (!container) return;
+
+    if (!itineraryMapInstance.value) {
+        itineraryMapInstance.value = L.map('itinerary-map');
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(itineraryMapInstance.value);
+        
+        itineraryLayerGroup.value = L.layerGroup().addTo(itineraryMapInstance.value);
+    }
+
+    // Clear existing layers
+    itineraryLayerGroup.value.clearLayers();
+
+    // Get valid destinations and sort by date/time
+    const validDestinations = props.destinations
+        .filter(d => d.latitude && d.longitude)
+        .sort((a, b) => {
+            const dateCompare = (a.visit_date || '').localeCompare(b.visit_date || '');
+            if (dateCompare !== 0) return dateCompare;
+            return (a.start_time || '').localeCompare(b.start_time || '');
+        });
+
+    if (validDestinations.length > 0) {
+        const latlngs = [];
+        validDestinations.forEach(dest => {
+            // Ensure numeric coordinates
+            const lat = parseFloat(dest.latitude);
+            const lng = parseFloat(dest.longitude);
+            const latlng = [lat, lng];
+            latlngs.push(latlng);
+            
+            const marker = L.marker(latlng)
+                .bindPopup(`
+                    <div class="text-center">
+                        <strong class="font-bold text-gray-800">${dest.name}</strong><br/>
+                        <span class="text-xs text-gray-500">${dest.visit_date}</span>
+                    </div>
+                `);
+            itineraryLayerGroup.value.addLayer(marker);
+        });
+
+        if (latlngs.length > 1) {
+            // OPTIMISTIC UI: Render straight line immediately (Fallback/Loading state)
+            const straightLine = L.polyline(latlngs, { 
+                color: '#9ca3af', // Gray
+                weight: 3, 
+                opacity: 0.5, 
+                dashArray: '5, 10' 
+            }).addTo(itineraryLayerGroup.value);
+            
+            itineraryMapInstance.value.fitBounds(straightLine.getBounds(), { padding: [50, 50] });
+
+            try {
+                 // Try to fetch road route
+                const routeGeometry = await fetchRoute(latlngs);
+                
+                // Determine if we are still on the same "frame" or if map was cleared?
+                // Actually `itineraryLayerGroup` clearing handles the race condition somewhat.
+                
+                if (routeGeometry) {
+                    itineraryLayerGroup.value.removeLayer(straightLine);
+                    
+                    const routeLayer = L.geoJSON(routeGeometry, {
+                        style: { color: '#6366f1', weight: 4, opacity: 0.8, dashArray: '10, 10' }
+                    }).addTo(itineraryLayerGroup.value);
+                    
+                    itineraryMapInstance.value.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+                } else {
+                    // Keep straight line, style as final
+                    straightLine.setStyle({ color: '#6366f1', opacity: 0.8, dashArray: null });
+                }
+            } catch (e) {
+                // Keep straight line, style as final
+                 straightLine.setStyle({ color: '#6366f1', opacity: 0.8, dashArray: null });
+            }
+        } else {
+             const bounds = L.latLngBounds(latlngs);
+             itineraryMapInstance.value.fitBounds(bounds, { padding: [50, 50] });
+             itineraryMapInstance.value.setZoom(13); // Manual zoom if only 1 marker
+        }
+
+    } else {
+        // Default view (Indonesia)
+        itineraryMapInstance.value.setView([-2.5489, 118.0149], 5);
+    }
+    
+    // Fix resize issues
+    setTimeout(() => {
+        itineraryMapInstance.value.invalidateSize();
+    }, 200);
+};
+
+watch(activeTab, (newTab) => {
+    if (newTab === 'itinerary') {
+        nextTick(() => {
+            initItineraryMap();
+        });
+    }
+});
+
+watch(() => props.destinations, (newVal) => {
+    console.log('Props Destinations Updated:', newVal);
+    console.table(newVal.map(d => ({ name: d.name, lat: d.latitude, lng: d.longitude }))); // Table view for clarity
+    if (itineraryMapInstance.value && activeTab.value === 'itinerary') {
+        initItineraryMap();
+    }
+}, { deep: true });
+
+const editingDestination = ref(null);
+
+const openAddModal = () => {
+    editingDestination.value = null;
+    destinationForm.reset();
+    showDestinationModal.value = true;
+};
+
+const editDestination = (dest) => {
+    console.log('Editing destination:', dest); // Debug prop data
+    editingDestination.value = dest;
+    destinationForm.name = dest.name;
+    destinationForm.category = dest.category;
+    destinationForm.description = dest.description || '';
+    destinationForm.location = dest.location || '';
+    destinationForm.visit_date = dest.visit_date;
+    destinationForm.start_time = dest.start_time ? dest.start_time.substring(0, 5) : '';
+    destinationForm.end_time = dest.end_time ? dest.end_time.substring(0, 5) : '';
+    destinationForm.estimated_cost = dest.estimated_cost;
+    destinationForm.latitude = dest.latitude;
+    destinationForm.longitude = dest.longitude;
+    
+    showDestinationModal.value = true;
+};
+
 const submitDestination = () => {
-    destinationForm.post(route('trips.destinations.store', props.trip.id), {
-        onSuccess: () => {
-            showDestinationModal.value = false;
-            destinationForm.reset();
-        },
-    });
+    // Ensure coordinates are numbers
+    if (destinationForm.latitude) destinationForm.latitude = parseFloat(destinationForm.latitude);
+    if (destinationForm.longitude) destinationForm.longitude = parseFloat(destinationForm.longitude);
+
+    if (editingDestination.value) {
+        destinationForm.patch(route('trips.destinations.update', [props.trip.id, editingDestination.value.id]), {
+            onSuccess: () => {
+                showDestinationModal.value = false;
+                destinationForm.reset();
+                editingDestination.value = null;
+                if (modalMarker.value) {
+                    modalMarker.value.remove();
+                    modalMarker.value = null;
+                }
+                if (modalMapInstance.value) {
+                    modalMapInstance.value.remove();
+                    modalMapInstance.value = null;
+                }
+            },
+        });
+    } else {
+        destinationForm.post(route('trips.destinations.store', props.trip.id), {
+            onSuccess: () => {
+                showDestinationModal.value = false;
+                destinationForm.reset();
+                if (modalMarker.value) {
+                    modalMarker.value.remove();
+                    modalMarker.value = null;
+                }
+                if (modalMapInstance.value) {
+                    modalMapInstance.value.remove();
+                    modalMapInstance.value = null;
+                }
+            },
+        });
+    }
+};
+
+const deleteDestination = (dest) => {
+    if (confirm(`Apakah Anda yakin ingin menghapus destinasi ${dest.name}?`)) {
+        router.delete(route('trips.destinations.destroy', [props.trip.id, dest.id]), {
+            onSuccess: () => {
+                if (editingDestination.value && editingDestination.value.id === dest.id) {
+                    showDestinationModal.value = false;
+                    editingDestination.value = null;
+                }
+                // Map will auto-update via watcher
+            },
+        });
+    }
 };
 
 const tabs = [
@@ -128,18 +504,7 @@ const totalEstimatedCost = computed(() => {
     return props.destinations.reduce((sum, dest) => sum + (dest.estimated_cost || 0), 0);
 });
 
-const promoteMember = (member) => {
-    if (confirm(`Apakah Anda yakin ingin menjadikan ${member.name} sebagai Admin?`)) {
-        router.patch(route('trips.members.update', [props.trip.id, member.trip_member_id]), {
-            role: 'admin'
-        }, {
-            preserveScroll: true,
-            onSuccess: () => {
-                // Optional toast logic here
-            }
-        });
-    }
-};
+
 </script>
 
 <template>
@@ -393,13 +758,12 @@ const promoteMember = (member) => {
                 </div>
 
                 <!-- Itinerary Tab -->
-                <div v-show="activeTab === 'itinerary'" class="space-y-6 px-4 sm:px-6 lg:px-8">
-                    <div class="flex items-center justify-between">
+                <div v-show="activeTab === 'itinerary'" class="space-y-6">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
                         <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Rundown Perjalanan</h3>
                         <button 
-                            v-if="isAdmin" 
-                            @click="showDestinationModal = true"
-                            class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition"
+                            @click="openAddModal"
+                            class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition w-full sm:w-auto"
                         >
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -408,7 +772,15 @@ const promoteMember = (member) => {
                         </button>
                     </div>
 
-                    <div v-if="destinations.length === 0" class="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
+                    <!-- Itinerary Map -->
+                    <div class="rounded-xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                        <div id="itinerary-map" class="h-64 sm:h-80 w-full z-0"></div>
+                        <div class="p-3 bg-white dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400 text-center border-t border-gray-100 dark:border-gray-700">
+                            Peta rute perjalanan berdasarkan urutan destinasi
+                        </div>
+                    </div>
+
+                    <div v-if="destinations.length === 0" class="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 px-4 sm:px-6 lg:px-8">
                         <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
@@ -426,7 +798,15 @@ const promoteMember = (member) => {
                                 <div v-for="dest in dests" :key="dest.id" class="p-4 flex items-start gap-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                                     <span class="text-2xl">{{ getCategoryIcon(dest.category) }}</span>
                                     <div class="flex-1 min-w-0">
-                                        <h5 class="font-medium text-gray-900 dark:text-gray-100">{{ dest.name }}</h5>
+                                        <div class="flex items-center gap-2">
+                                            <h5 class="font-medium text-gray-900 dark:text-gray-100">{{ dest.name }}</h5>
+                                            <span v-if="!dest.latitude || !dest.longitude" class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full flex items-center gap-1" title="Lokasi belum diatur, tidak akan muncul di peta">
+                                                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                </svg>
+                                                No Loc
+                                            </span>
+                                        </div>
                                         <p v-if="dest.description" class="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{{ dest.description }}</p>
                                         <div class="flex items-center gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
                                             <span v-if="dest.start_time" class="flex items-center gap-1">
@@ -443,8 +823,24 @@ const promoteMember = (member) => {
                                             </span>
                                         </div>
                                     </div>
-                                    <div v-if="dest.estimated_cost" class="text-right">
-                                        <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ formatCurrency(dest.estimated_cost) }}</span>
+                                    <div class="text-right flex flex-col items-end gap-1">
+                                        <div v-if="dest.estimated_cost">
+                                            <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ formatCurrency(dest.estimated_cost) }}</span>
+                                        </div>
+                                        <div class="flex items-center gap-3">
+                                            <button 
+                                                @click="editDestination(dest)" 
+                                                class="text-xs font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 transition"
+                                            >
+                                                Edit
+                                            </button>
+                                            <button 
+                                                @click="deleteDestination(dest)" 
+                                                class="text-xs font-medium text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition"
+                                            >
+                                                Hapus
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -495,7 +891,7 @@ const promoteMember = (member) => {
                                     </svg>
                                 </div>
                                 <div>
-                                    <h4 class="font-semibold text-lg">💰 Tabungan</h4>
+                                    <h4 class="font-semibold text-lg">Tabungan</h4>
                                     <p class="text-sm text-green-100">Lihat & bayar tabungan</p>
                                 </div>
                             </div>
@@ -512,7 +908,7 @@ const promoteMember = (member) => {
                                     </svg>
                                 </div>
                                 <div>
-                                    <h4 class="font-semibold text-lg">💸 Pengeluaran</h4>
+                                    <h4 class="font-semibold text-lg">Pengeluaran</h4>
                                     <p class="text-sm text-red-100">Catat pengeluaran trip</p>
                                 </div>
                             </div>
@@ -529,7 +925,7 @@ const promoteMember = (member) => {
                                     </svg>
                                 </div>
                                 <div>
-                                    <h4 class="font-semibold text-lg">🗳️ Penarikan</h4>
+                                    <h4 class="font-semibold text-lg">Penarikan</h4>
                                     <p class="text-sm text-purple-100">Request & voting</p>
                                 </div>
                             </div>
@@ -555,7 +951,11 @@ const promoteMember = (member) => {
                 <div v-show="activeTab === 'members'" class="space-y-6 px-4 sm:px-6 lg:px-8">
                     <div class="flex items-center justify-between">
                         <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">👥 Anggota Trip</h3>
-                        <button v-if="isAdmin" class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition">
+                        <button 
+                            v-if="isAdmin" 
+                            @click="showInviteModal = true"
+                            class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition"
+                        >
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                             </svg>
@@ -608,7 +1008,7 @@ const promoteMember = (member) => {
                     <div class="inline-block transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
                         <form @submit.prevent="submitDestination">
                             <div class="px-6 py-5 border-b border-gray-100 dark:border-gray-700">
-                                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Tambah Destinasi</h3>
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ editingDestination ? 'Edit Destinasi' : 'Tambah Destinasi' }}</h3>
                             </div>
                             <div class="p-6 space-y-4 max-h-96 overflow-y-auto">
                                 <div>
@@ -623,8 +1023,54 @@ const promoteMember = (member) => {
                                     </select>
                                     <InputError :message="destinationForm.errors.category" class="mt-2" />
                                 </div>
+
+                                <!-- Map Picker & Location Search -->
+                                <div class="space-y-2">
+                                    <InputLabel value="Cari Lokasi / Tandai di Peta" />
+                                    <div class="flex gap-2">
+                                        <input 
+                                            v-model="searchQuery" 
+                                            type="text" 
+                                            class="block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm dark:bg-gray-900 dark:border-gray-700 dark:text-gray-300"
+                                            placeholder="Cari lokasi (contoh: Monas)" 
+                                            @keyup.enter.prevent="searchLocation"
+                                        />
+                                        <button 
+                                            type="button"
+                                            @click="searchLocation"
+                                            class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-50"
+                                            :disabled="isSearching"
+                                        >
+                                            {{ isSearching ? '...' : 'Cari' }}
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="rounded-lg overflow-hidden border border-gray-300 dark:border-gray-700 relative">
+                                        <div id="modal-map" class="h-64 w-full z-0"></div>
+                                        <div v-if="!destinationForm.latitude" class="absolute inset-0 flex items-center justify-center bg-gray-100/50 dark:bg-gray-800/50 backdrop-blur-sm z-[400] pointer-events-none">
+                                            <span class="text-sm text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 px-3 py-1 rounded-full shadow">
+                                                Klik peta atau cari lokasi
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Lat/Lng Inputs (Read-only/Hidden visually if preferred, but useful for verification) -->
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <InputLabel value="Latitude" class="text-xs" />
+                                            <TextInput v-model="destinationForm.latitude" type="text" class="mt-1 block w-full text-xs bg-gray-50 dark:bg-gray-800" readonly placeholder="Latitude" />
+                                            <InputError :message="destinationForm.errors.latitude" class="mt-1" />
+                                        </div>
+                                        <div>
+                                            <InputLabel value="Longitude" class="text-xs" />
+                                            <TextInput v-model="destinationForm.longitude" type="text" class="mt-1 block w-full text-xs bg-gray-50 dark:bg-gray-800" readonly placeholder="Longitude" />
+                                            <InputError :message="destinationForm.errors.longitude" class="mt-1" />
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div>
-                                    <InputLabel for="dest_location" value="Lokasi (Opsional)" />
+                                    <InputLabel for="dest_location" value="Nama Lokasi / Alamat" />
                                     <TextInput id="dest_location" v-model="destinationForm.location" type="text" class="mt-1 block w-full" />
                                     <InputError :message="destinationForm.errors.location" class="mt-2" />
                                 </div>
@@ -674,6 +1120,127 @@ const promoteMember = (member) => {
                 </div>
             </div>
         </Teleport>
+
+        <!-- Invite Member Modal -->
+        <Teleport to="body">
+            <div v-if="showInviteModal" class="fixed inset-0 z-50 overflow-y-auto">
+                <div class="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showInviteModal = false" />
+                    <div class="inline-block transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:align-middle">
+                        <form @submit.prevent="submitInvite">
+                            <div class="px-6 py-5 border-b border-gray-100 dark:border-gray-700">
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Undang Anggota Baru</h3>
+                            </div>
+                            <div class="p-6 space-y-4">
+                                <div>
+                                    <InputLabel for="invite_email" value="Email Pengguna" />
+                                    <TextInput 
+                                        id="invite_email" 
+                                        v-model="inviteForm.email" 
+                                        type="email" 
+                                        class="mt-1 block w-full" 
+                                        placeholder="email@contoh.com" 
+                                        required 
+                                        autofocus
+                                    />
+                                    <InputError :message="inviteForm.errors.email" class="mt-2" />
+                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        Pastikan user sudah terdaftar di aplikasi ini.
+                                    </p>
+                                </div>
+                                <div>
+                                    <InputLabel for="invite_role" value="Role" />
+                                    <select 
+                                        id="invite_role" 
+                                        v-model="inviteForm.role" 
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+                                    >
+                                        <option value="member">Anggota (Member)</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                    <InputError :message="inviteForm.errors.role" class="mt-2" />
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 dark:bg-gray-700/50 px-6 py-4 flex justify-end gap-3">
+                                <button 
+                                    type="button" 
+                                    @click="showInviteModal = false" 
+                                    class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition"
+                                >
+                                    Batal
+                                </button>
+                                <PrimaryButton :disabled="inviteForm.processing">
+                                    {{ inviteForm.processing ? 'Mengirim...' : 'Kirim Undangan' }}
+                                </PrimaryButton>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- Promote Admin Confirmation Modal -->
+        <Teleport to="body">
+            <div v-if="showPromoteModal" class="fixed inset-0 z-50 overflow-y-auto">
+                <div class="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showPromoteModal = false" />
+                    <div class="inline-block transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-sm sm:align-middle">
+                        <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                            <div class="sm:flex sm:items-start">
+                                <div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 sm:mx-0 sm:h-10 sm:w-10">
+                                    <svg class="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+                                    </svg>
+                                </div>
+                                <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                                    <h3 class="text-lg font-semibold leading-6 text-gray-900 dark:text-gray-100">Promosikan Anggota</h3>
+                                    <div class="mt-2">
+                                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                                            Apakah Anda yakin ingin menjadikan <strong>{{ memberToPromote?.name }}</strong> sebagai Admin?
+                                            Admin dapat mengelola trip, destinasi, dan keuangan.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700/50 px-6 py-4 flex justify-end gap-3 sm:flex-row-reverse">
+                            <button 
+                                type="button" 
+                                @click="confirmPromote" 
+                                class="mt-3 inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 sm:ml-3 sm:w-auto"
+                            >
+                                Ya, Jadikan Admin
+                            </button>
+                            <button 
+                                type="button" 
+                                @click="showPromoteModal = false" 
+                                class="mt-3 inline-flex w-full justify-center rounded-md bg-white dark:bg-gray-800 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-300 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 sm:mt-0 sm:w-auto"
+                            >
+                                Batal
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
         </div>
     </AuthenticatedLayout>
 </template>
+
+<style>
+/* Leaflet Map */
+#itinerary-map, #modal-map {
+    width: 100%;
+    z-index: 1;
+}
+
+/* Fix z-index for Leaflet controls */
+.leaflet-control-container {
+    z-index: 2;
+}
+
+/* Ensure map attribution doesn't overlay modal actions */
+.leaflet-bottom {
+    z-index: 2;
+}
+</style>

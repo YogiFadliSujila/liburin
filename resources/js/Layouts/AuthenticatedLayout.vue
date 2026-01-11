@@ -15,10 +15,11 @@ const props = defineProps({
 const showingNavigationDropdown = ref(false);
 const page = usePage();
 
-// Helper to check active route
 const isActive = (routePattern) => {
     return route().current(routePattern);
 };
+
+const showMobileSidebar = ref(false);
 </script>
 
 <template>
@@ -30,25 +31,12 @@ const isActive = (routePattern) => {
                 <div class="flex items-center gap-8">
                     <div class="flex items-center space-x-2">
                         <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white shadow-glow">
-                            <span class="material-symbols-rounded text-xl">travel_explore</span>
+                            <img src="https://img.freepik.com/free-psd/3d-rendering-travel-icon_23-2151695696.jpg?t=st=1768116496~exp=1768120096~hmac=1a85b29300d7ef1c3cee34aec12c9c963445b7c36db14f6f45661aa81205c240&w=1480" class="w-full h-full object-cover rounded-lg">
                         </div>
                         <Link :href="route('dashboard')" class="font-bold text-lg text-text-main-light dark:text-text-main-dark font-display">
-                            TripMaster
+                            Liburin
                         </Link>
                     </div>
-
-                    <!-- Desktop Navigation Links -->
-                    <nav class="hidden md:flex space-x-6">
-                        <NavLink :href="route('dashboard')" :active="isActive('dashboard')">
-                            Dashboard
-                        </NavLink>
-                        <NavLink :href="route('trips.index')" :active="isActive('trips.*')">
-                            Trips
-                        </NavLink>
-                         <NavLink href="#" :active="false">
-                            Savings
-                        </NavLink>
-                    </nav>
                 </div>
 
                 <!-- Right: Profile & Notifications -->
@@ -87,8 +75,8 @@ const isActive = (routePattern) => {
                         </Dropdown>
                     </div>
 
-                     <!-- Mobile Profile Icon (Direct Link) -->
-                    <Link :href="route('profile.edit')" class="md:hidden w-8 h-8 rounded-full bg-gradient-to-tr from-blue-400 to-purple-500 p-0.5 cursor-pointer block">
+                     <!-- Mobile Profile Icon (Sidebar Trigger) -->
+                    <button @click="showMobileSidebar = true" class="md:hidden w-8 h-8 rounded-full bg-gradient-to-tr from-blue-400 to-purple-500 p-0.5 cursor-pointer block">
                          <div class="w-full h-full rounded-full bg-white dark:bg-gray-800 flex items-center justify-center overflow-hidden">
                              <img 
                                 v-if="$page.props.auth.user.avatar_url" 
@@ -99,7 +87,84 @@ const isActive = (routePattern) => {
                                  {{ $page.props.auth.user.name.charAt(0).toUpperCase() }}
                              </span>
                          </div>
-                    </Link>
+                    </button>
+                    
+                    <!-- Mobile Sidebar (Slide-over) -->
+                    <Teleport to="body">
+                        <div>
+                            <!-- Backdrop -->
+                            <div 
+                                v-if="showMobileSidebar"
+                                class="fixed inset-0 z-[60] bg-gray-900/50 backdrop-blur-sm transition-opacity"
+                                @click="showMobileSidebar = false"
+                            ></div>
+
+                            <!-- Sidebar Panel -->
+                            <div 
+                                class="fixed inset-y-0 right-0 z-[70] w-64 bg-white dark:bg-gray-900 shadow-2xl transform transition-transform duration-300 ease-in-out"
+                                :class="showMobileSidebar ? 'translate-x-0' : 'translate-x-full'"
+                            >
+                                <div class="flex flex-col h-full">
+                                    <div class="p-6 border-b border-gray-100 dark:border-gray-800">
+                                        <div class="flex items-center justify-between mb-6">
+                                            <span class="text-lg font-bold text-gray-900 dark:text-gray-100">Menu Profil</span>
+                                            <button @click="showMobileSidebar = false" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                                                <span class="material-symbols-rounded">close</span>
+                                            </button>
+                                        </div>
+                                        <div class="flex items-center gap-4">
+                                            <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-400 to-purple-500 p-0.5">
+                                                <div class="w-full h-full rounded-full bg-white dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                                                    <img 
+                                                        v-if="$page.props.auth.user.avatar_url" 
+                                                        :src="$page.props.auth.user.avatar_url" 
+                                                        class="w-full h-full object-cover"
+                                                    />
+                                                    <span v-else class="text-xl font-bold text-primary">
+                                                        {{ $page.props.auth.user.name.charAt(0).toUpperCase() }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <h4 class="font-bold text-gray-900 dark:text-gray-100">{{ $page.props.auth.user.name }}</h4>
+                                                <p class="text-xs text-gray-500 dark:text-gray-400">{{ $page.props.auth.user.email }}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <nav class="flex-1 p-4 space-y-2">
+                                        <Link 
+                                            :href="route('profile.edit')" 
+                                            class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                                            @click="showMobileSidebar = false"
+                                        >
+                                            <span class="material-symbols-rounded">person</span>
+                                            Edit Profil
+                                        </Link>
+                                        
+                                        <!-- Other potential links could go here -->
+                                        <div class="border-t border-gray-100 dark:border-gray-800 my-4"></div>
+
+                                        <Link 
+                                            :href="route('logout')" 
+                                            method="post" 
+                                            as="button"
+                                            class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition"
+                                        >
+                                            <span class="material-symbols-rounded">logout</span>
+                                            Keluar
+                                        </Link>
+                                    </nav>
+                                    
+                                    <div class="p-4 border-t border-gray-100 dark:border-gray-800">
+                                        <p class="text-xs text-center text-gray-400">
+                                            Liburin v1.0
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </Teleport>
                 </div>
             </div>
         </header>
@@ -115,51 +180,8 @@ const isActive = (routePattern) => {
             <slot />
         </main>
 
-        <!-- Bottom Navigation (Mobile Only) -->
-        <nav class="md:hidden fixed bottom-0 left-0 w-full bg-card-light dark:bg-card-dark border-t border-gray-200 dark:border-gray-800 pb-safe pt-2 z-50">
-            <div class="flex justify-around items-center h-16 max-w-md mx-auto">
-                <Link :href="route('dashboard')" class="flex flex-col items-center justify-center w-full h-full space-y-1 group">
-                    <span 
-                        class="material-symbols-rounded text-2xl transition-colors"
-                        :class="isActive('dashboard') ? 'text-primary' : 'text-text-sub-light dark:text-text-sub-dark group-hover:text-primary dark:group-hover:text-primary'"
-                    >dashboard</span>
-                    <span 
-                        class="text-[10px] font-medium transition-colors"
-                        :class="isActive('dashboard') ? 'text-primary' : 'text-text-sub-light dark:text-text-sub-dark group-hover:text-primary dark:group-hover:text-primary'"
-                    >Dashboard</span>
-                </Link>
-
-                <Link :href="route('trips.index')" class="flex flex-col items-center justify-center w-full h-full space-y-1 group">
-                    <span 
-                        class="material-symbols-rounded text-2xl transition-colors"
-                        :class="isActive('trips.*') ? 'text-primary' : 'text-text-sub-light dark:text-text-sub-dark group-hover:text-primary dark:group-hover:text-primary'"
-                    >travel_explore</span>
-                    <span 
-                        class="text-[10px] font-medium transition-colors"
-                        :class="isActive('trips.*') ? 'text-primary' : 'text-text-sub-light dark:text-text-sub-dark group-hover:text-primary dark:group-hover:text-primary'"
-                    >Trips</span>
-                </Link>
-
-                <Link href="#" class="flex flex-col items-center justify-center w-full h-full space-y-1 group">
-                    <span class="material-symbols-rounded text-2xl text-text-sub-light dark:text-text-sub-dark group-hover:text-primary dark:group-hover:text-primary transition-colors">account_balance_wallet</span>
-                    <span class="text-[10px] font-medium text-text-sub-light dark:text-text-sub-dark group-hover:text-primary dark:group-hover:text-primary transition-colors">Savings</span>
-                </Link>
-
-                <Link :href="route('profile.edit')" class="flex flex-col items-center justify-center w-full h-full space-y-1 group">
-                    <span 
-                        class="material-symbols-rounded text-2xl transition-colors"
-                        :class="isActive('profile.edit') ? 'text-primary' : 'text-text-sub-light dark:text-text-sub-dark group-hover:text-primary dark:group-hover:text-primary'"
-                    >person</span>
-                    <span 
-                        class="text-[10px] font-medium transition-colors"
-                        :class="isActive('profile.edit') ? 'text-primary' : 'text-text-sub-light dark:text-text-sub-dark group-hover:text-primary dark:group-hover:text-primary'"
-                    >Profile</span>
-                </Link>
-            </div>
-        </nav>
         
         <!-- Spacer for Bottom Nav matches height of nav (Mobile Only) -->
-        <div class="md:hidden h-6 w-full bg-card-light dark:bg-card-dark fixed bottom-0 z-50"></div>
     </div>
 </template>
 

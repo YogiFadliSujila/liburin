@@ -59,6 +59,14 @@ class TripPolicy
     }
 
     /**
+     * Determine whether the user can manage destinations (create, update, delete).
+     */
+    public function manageDestinations(User $user, Trip $trip): bool
+    {
+        return $trip->hasMember($user);
+    }
+
+    /**
      * Determine whether the user can manage finances.
      */
     public function manageFinances(User $user, Trip $trip): bool

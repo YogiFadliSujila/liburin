@@ -60,6 +60,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/create', [SavingsController::class, 'create'])->name('create');
         Route::post('/', [SavingsController::class, 'store'])->name('store');
         Route::get('/{savings}', [SavingsController::class, 'show'])->name('show');
+        Route::post('/{savings}/approve', [SavingsController::class, 'approve'])->name('approve');
         Route::get('/{savings}/status', [SavingsController::class, 'checkStatus'])->name('status');
         Route::delete('/{savings}', [SavingsController::class, 'destroy'])->name('destroy');
     });

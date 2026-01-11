@@ -1,13 +1,31 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 
 defineProps({
     trips: {
         type: Array,
         default: () => [],
     },
+    invitations: {
+        type: Array,
+        default: () => [],
+    },
 });
+
+const handleAccept = (tripId) => {
+    router.post(route('trips.members.accept', tripId), {}, {
+        onSuccess: () => {
+            // Toast handled by flash message
+        },
+    });
+};
+
+const handleDecline = (tripId) => {
+    if (confirm('Apakah Anda yakin ingin menolak undangan ini?')) {
+        router.post(route('trips.members.decline', tripId));
+    }
+};
 
 const formatCurrency = (amount) => {
     return new Intl.NumberFormat('id-ID', {
@@ -65,6 +83,43 @@ const getStatusLabel = (status) => {
             <p class="text-text-sub-light dark:text-text-sub-dark text-sm">
                 Siap untuk petualangan berikutnya?
             </p>
+        </div>
+
+        <!-- Pending Invitations -->
+        <div v-if="invitations.length > 0" class="mb-10">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <span>📩</span> Undangan Pending
+            </h3>
+            <div class="grid gap-4 md:grid-cols-2">
+                <div v-for="invite in invitations" :key="invite.id" class="flex flex-col sm:flex-row items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border-l-4 border-indigo-500">
+                    <div class="flex items-center gap-4 mb-3 sm:mb-0">
+                        <div class="h-12 w-12 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-2xl">
+                            📍
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-gray-900 dark:text-gray-100">{{ invite.name }}</h4>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                Diundang oleh <span class="font-medium text-indigo-600 dark:text-indigo-400">{{ invite.creator.name }}</span>
+                                <span v-if="invite.is_admin" class="ml-2 px-1.5 py-0.5 bg-yellow-100 text-yellow-800 rounded text-[10px] font-bold">ADMIN</span>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <button 
+                            @click="handleDecline(invite.id)"
+                            class="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 rounded-lg transition"
+                        >
+                            Tolak
+                        </button>
+                        <button 
+                            @click="handleAccept(invite.id)"
+                            class="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition"
+                        >
+                            Terima
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Trips Header -->

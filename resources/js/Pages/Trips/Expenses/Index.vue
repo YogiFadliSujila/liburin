@@ -131,7 +131,7 @@ const cancelEdit = () => {
                                 <p class="text-sm text-gray-500 dark:text-gray-400">Total Pengeluaran</p>
                                 <p class="text-2xl font-bold text-red-600 dark:text-red-400">{{ formatCurrency(trip.total_expenses) }}</p>
                             </div>
-                            <span class="text-3xl">💸</span>
+
                         </div>
                     </div>
                     <div class="rounded-xl bg-white dark:bg-gray-800 p-5 shadow-sm border border-gray-100 dark:border-gray-700">
@@ -140,7 +140,7 @@ const cancelEdit = () => {
                                 <p class="text-sm text-gray-500 dark:text-gray-400">Total Tabungan</p>
                                 <p class="text-2xl font-bold text-green-600 dark:text-green-400">{{ formatCurrency(trip.total_savings) }}</p>
                             </div>
-                            <span class="text-3xl">💰</span>
+
                         </div>
                     </div>
                     <div class="rounded-xl bg-white dark:bg-gray-800 p-5 shadow-sm border border-gray-100 dark:border-gray-700 sm:col-span-2">
@@ -153,7 +153,7 @@ const cancelEdit = () => {
                                     {{ formatCurrency(trip.remaining_balance) }}
                                 </p>
                             </div>
-                            <span class="text-3xl">📊</span>
+
                         </div>
                     </div>
                 </div>

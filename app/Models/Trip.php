@@ -55,7 +55,7 @@ class Trip extends Model
     public function members(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'trip_members')
-            ->withPivot(['role', 'status', 'joined_at'])
+            ->withPivot(['id', 'role', 'status', 'joined_at'])
             ->withTimestamps()
             ->withCasts(['joined_at' => 'datetime']);
     }

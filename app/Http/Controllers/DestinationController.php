@@ -23,8 +23,7 @@ class DestinationController extends Controller
         $destinations = $trip->destinations()
             ->orderBy('visit_date')
             ->orderBy('order')
-            ->get()
-            ->groupBy(fn($dest) => $dest->visit_date->format('Y-m-d'));
+            ->get();
 
         return Inertia::render('Trips/Destinations/Index', [
             'trip' => [
@@ -43,7 +42,9 @@ class DestinationController extends Controller
      */
     public function store(Request $request, Trip $trip): RedirectResponse
     {
-        Gate::authorize('update', $trip);
+        Gate::authorize('manageDestinations', $trip);
+
+        \Illuminate\Support\Facades\Log::info('Store Destination Request:', $request->all());
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -55,6 +56,8 @@ class DestinationController extends Controller
             'end_time' => 'nullable|date_format:H:i|after:start_time',
             'estimated_cost' => 'nullable|numeric|min:0',
             'category' => 'sometimes|string|in:attraction,food,transport,accommodation,other',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
         ]);
 
         // Get the max order for this date
@@ -75,7 +78,9 @@ class DestinationController extends Controller
      */
     public function update(Request $request, Trip $trip, Destination $destination): RedirectResponse
     {
-        Gate::authorize('update', $trip);
+        Gate::authorize('manageDestinations', $trip);
+
+        \Illuminate\Support\Facades\Log::info('Update Destination Request:', $request->all());
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -87,7 +92,11 @@ class DestinationController extends Controller
             'end_time' => 'nullable|date_format:H:i|after:start_time',
             'estimated_cost' => 'nullable|numeric|min:0',
             'category' => 'sometimes|string|in:attraction,food,transport,accommodation,other',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
         ]);
+
+        \Illuminate\Support\Facades\Log::info('Validated Data:', $validated);
 
         $destination->update($validated);
 
@@ -99,7 +108,7 @@ class DestinationController extends Controller
      */
     public function destroy(Trip $trip, Destination $destination): RedirectResponse
     {
-        Gate::authorize('update', $trip);
+        Gate::authorize('manageDestinations', $trip);
 
         $destination->delete();
 
@@ -111,7 +120,7 @@ class DestinationController extends Controller
      */
     public function reorder(Request $request, Trip $trip): RedirectResponse
     {
-        Gate::authorize('update', $trip);
+        Gate::authorize('manageDestinations', $trip);
 
         $validated = $request->validate([
             'destinations' => 'required|array',
